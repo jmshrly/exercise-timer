@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercise Interval Timer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            transition: background-color 0.5s ease;
+            background-color: #f0f0f0; /* Default background */
+        }
+        .timer-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+        }
+        .controls label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .controls input[type="number"] {
+            width: 80px;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 16px;
+        }
+        .buttons button {
+            padding: 12px 25px;
+            font-size: 18px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+        }
+        #startButton { background-color: #28a745; } /* Green */
+        #startButton:hover { background-color: #218838; }
+        #stopButton { background-color: #dc3545; } /* Red */
+        #stopButton:hover { background-color: #c82333; }
+
+        #timerDisplay {
+            font-size: 72px;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #333;
+        }
+        #statusMessage {
+            font-size: 24px;
+            font-weight: bold;
+            min-height: 30px; /* To prevent layout shift */
+            margin-bottom: 20px;
+        }
+
+        /* Background color classes */
+        .exercise-active {
+            background-color: #90EE90 !important; /* Light Green */
+        }
+        .rest-active {
+            background-color: #ADD8E6 !important; /* Light Blue */
+        }
+        .flashing-blue {
+            animation: flashBlue 1s infinite;
+        }
+
+        @keyframes flashBlue {
+            0%, 100% { background-color: #ADD8E6; } /* Light Blue */
+            50% { background-color: #87CEEB; } /* Sky Blue - slightly different */
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="timer-container">
+        <h1>Interval Timer</h1>
+
+        <div id="statusMessage">Set times and Press Start</div>
+        <div id="timerDisplay">00</div>
+
+        <div class="controls">
+            <div>
+                <label for="exerciseTime">Exercise Time (seconds):</label>
+                <input type="number" id="exerciseTime" value="45" min="1">
+            </div>
+            <div>
+                <label for="restTime">Cooldown Time (seconds):</label>
+                <input type="number" id="restTime" value="15" min="1">
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button id="startButton">Start</button>
+            <button id="stopButton">Stop</button>
+        </div>
+    </div>
+
+    <!-- ****** ADD THIS AUDIO ELEMENT ****** -->
+    <!-- Make sure 'chime.mp3' is the name of your sound file -->
+    <!-- and it's in the same folder as this HTML file. -->
+    <audio id="chimeSound" src="chime.mp3" preload="auto"></audio>
+    <!-- ************************************ -->
+
+
+    <script>
+        // Get DOM elements
+        const exerciseTimeInput = document.getElementById('exerciseTime');
+        const restTimeInput = document.getElementById('restTime');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const statusMessage = document.getElementById('statusMessage');
+        const bodyElement = document.body;
+        // ****** ADD THIS LINE ******
+        const chimeSound = document.getElementById('chimeSound');
+        // **************************
+
+        // Timer variables
+        let timerIntervalId = null;
+        let flashIntervalId = null;
+        let currentTotalSeconds = 0;
+        let isExercising = true;
+        let isRunning = false;
+
+        function updateDisplay() {
+            timerDisplay.textContent = currentTotalSeconds.toString().padStart(2, '0');
+        }
+
+        function playChime() {
+            if (chimeSound) {
+                chimeSound.currentTime = 0; // Rewind to start, in case it's played quickly
+                chimeSound.play().catch(error => {
+                    // Autoplay was prevented.
+                    // This can happen if the user hasn't interacted with the page yet,
+                    // but usually clicks (like start button) enable audio.
+                    console.warn("Audio play failed:", error);
+                });
+            }
+        }
+
+        function switchPhase() {
+            isExercising = !isExercising;
+            clearFlash();
+
+            // ****** CALL playChime() HERE ******
+            playChime();
+            // *********************************
+
+            if (isExercising) {
+                currentTotalSeconds = parseInt(exerciseTimeInput.value);
+                statusMessage.textContent = "WORK!";
+                bodyElement.classList.remove('rest-active', 'flashing-blue');
+                bodyElement.classList.add('exercise-active');
+            } else {
+                currentTotalSeconds = parseInt(restTimeInput.value);
+                statusMessage.textContent = "REST!";
+                bodyElement.classList.remove('exercise-active');
+                bodyElement.classList.add('rest-active');
+                startFlash();
+            }
+            updateDisplay();
+        }
+
+        function startFlash() {
+            clearFlash();
+            bodyElement.classList.add('flashing-blue');
+        }
+
+        function clearFlash() {
+            bodyElement.classList.remove('flashing-blue');
+        }
+
+        function tick() {
+            if (currentTotalSeconds > 0) {
+                currentTotalSeconds--;
+                updateDisplay();
+            } else {
+                switchPhase();
+            }
+        }
+
+        startButton.addEventListener('click', () => {
+            if (isRunning) return;
+
+            isRunning = true;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            exerciseTimeInput.disabled = true;
+            restTimeInput.disabled = true;
+
+            // Preload sound on first start attempt, helps with some browser restrictions
+            if (chimeSound) chimeSound.load();
+
+            isExercising = true;
+            currentTotalSeconds = parseInt(exerciseTimeInput.value);
+            if (isNaN(currentTotalSeconds) || currentTotalSeconds <= 0) {
+                alert("Please enter a valid exercise time.");
+                stopTimer();
+                return;
+            }
+            const restSeconds = parseInt(restTimeInput.value);
+             if (isNaN(restSeconds) || restSeconds <= 0) {
+                alert("Please enter a valid rest time.");
+                stopTimer();
+                return;
+            }
+
+            statusMessage.textContent = "WORK!";
+            bodyElement.classList.remove('rest-active', 'flashing-blue');
+            bodyElement.classList.add('exercise-active');
+            updateDisplay();
+
+            // Play chime when starting the very first set
+            // ****** OPTIONAL: Play chime on initial start ******
+            // playChime();
+            // **************************************************
+
+            if (timerIntervalId) {
+                clearInterval(timerIntervalId);
+            }
+            timerIntervalId = setInterval(tick, 1000);
+        });
+
+        stopButton.addEventListener('click', stopTimer);
+
+        function stopTimer() {
+            isRunning = false;
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            exerciseTimeInput.disabled = false;
+            restTimeInput.disabled = false;
+
+            clearInterval(timerIntervalId);
+            timerIntervalId = null;
+            clearFlash();
+
+            bodyElement.classList.remove('exercise-active', 'rest-active', 'flashing-blue');
+            bodyElement.style.backgroundColor = '#f0f0f0';
+            statusMessage.textContent = "Timer Stopped. Set times and Press Start.";
+            currentTotalSeconds = 0;
+            updateDisplay();
+        }
+
+        stopButton.disabled = true;
+        updateDisplay();
+
+    </script>
+
+</body>
+</html>
